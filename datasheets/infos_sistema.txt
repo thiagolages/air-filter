@@ -1,0 +1,9 @@
+1- o circuito utiliza o sensor de pressão MPX 5010 DP, sua faixa de atuação na saida é de 0,2 a 4,7V linear.
+]2- O limite de alarme maximo da indicação é 2,25 V, quando atingir este valor , deve  indicar no display FILTRO SATURADO.
+E UMA VEZ CORRIGIDO AUTOMATICAMENTE , APAGARA A MENSAGEM DE FILTRO SATURADO E O SISTEMA VOLTARÁ 
+LER NORMALMENTE.
+Funcionamento geral do sistema 
+1-    Sua alimentação será igual ao Raspbery 5VCC.
+2-  O raspberry recebera uma amostra de rotação do motor  determinada ( 3200 RPM, 53, hz), capitada pelo  sensor indutivo.Conforme anexo o catalogo com a  saida PNP NA. 
+3- Sempre que o motor passar por esta  rotação ele vai memorizar o valor da pressão,  medida pelo sensor MPX5010 ,  quando passar novamente por esta rotação e vlor da pressão
+expressa em volts for menor que a medida anterior , é sinal que o filtro esta furado, assim escrever no display FALHA NO FILTRO DE AR OU NA LINHA
