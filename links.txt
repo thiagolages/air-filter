@@ -1,0 +1,30 @@
+GERAL - RASPBERRY PI:
+
+
+PINOUT:
+https://pinout.xyz/pinout/pin15_gpio22
+
+
+
+CONVERSOR AD - MCP3008:
+
+
+BASIC TUTORIALS
+https://learn.adafruit.com/raspberry-pi-analog-to-digital-converters/mcp3008
+https://www.instructables.com/id/ADC-MCP3008-Raspberry-Pi/
+
+LIBRARY
+https://github.com/adafruit/Adafruit_Python_MCP3008
+
+DATASHEET
+https://cdn-shop.adafruit.com/datasheets/MCP3008.pdf
+
+
+LCD
+
+BASIC TUTORIALS
+https://learn.adafruit.com/drive-a-16x2-lcd-directly-with-a-raspberry-pi/wiring
+https://pimylifeup.com/raspberry-pi-lcd-16x2/
+
+DATASHEET
+http://file1.dzsc.com/product/15/01/21/85336_141030602.pdf

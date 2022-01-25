@@ -1,0 +1,245 @@
+#!/usr/bin/python
+import RPi.GPIO as GPIO
+import numpy as np
+import time
+import constant # Importar arquivo que contem as constantes necessarias para o programa
+
+# Definitions
+
+GPIO.setmode(GPIO.BCM)
+
+#Usando GPIO.BCM (apenas para debug)
+#SENSOR_PRESSAO = 17 # nao e necessario, ja que estamos colocando direto no MCP
+#SENSOR_ROTACAO = 27 # idem
+
+#Usando GPIO.BOARD
+#SENSOR_PRESSAO = 15
+#SENSOR_ROTACAO = 16
+
+# GLOBALS
+
+pressure_array = np.array([-1]) #global pois sera acessado por funcoes fora da main
+
+
+# Para medicao de frequencia na saida do acoplador optico
+
+LED = 6
+RESET = 26
+BUZZER = 27
+
+GPIO.setup(LED, GPIO.OUT)
+GPIO.setup(RESET, GPIO.IN)
+GPIO.setup(BUZZER, GPIO.OUT)
+
+GPIO.output(BUZZER, False)
+GPIO.output(LED, False)
+
+GPIO_ENTRADA = 12
+GPIO.setup(GPIO_ENTRADA, GPIO.IN)
+last_time = time.time()
+this_time = time.time()
+RPM = 0
+
+# callback que sera chamado quando detectarmos borda de subida
+def EventsPerTime(GPIO_ENTRADA):
+        global RPM, this_time, last_time
+        if GPIO.input(GPIO_ENTRADA) > 0.5:
+                this_time = time.time()
+                RPM = (1/(this_time - last_time))*60 	# em RPM
+                #RPM = 1/(this_time - last_time)		# em Hz
+                #print ("Current RPM = ",RPM)
+                last_time = this_time
+
+
+
+
+
+##### MCP3008 ######
+# Import SPI library (for hardware SPI) and MCP3008 library.
+import Adafruit_GPIO.SPI as SPI
+import Adafruit_MCP3008
+
+# Software SPI configuration:
+CLK  = 18
+MISO = 23
+MOSI = 24
+CS   = 22
+
+mcp = Adafruit_MCP3008.MCP3008(clk=CLK, cs=CS, miso=MISO, mosi=MOSI)
+
+##### LCD #####
+import Adafruit_CharLCD as LCD
+
+# Raspberry Pi pin configuration:
+lcd_rs         = 25  #Note this might need to be changed to 21 for older revision Pi's.
+lcd_en        = 20
+lcd_d4        = 19
+lcd_d5        = 16
+lcd_d6        = 21
+lcd_d7        = 13
+lcd_backlight = 4
+
+# Define LCD column and row size for 16x2 LCD.
+lcd_columns = 16
+lcd_rows    = 2
+
+# Initialize the LCD using the pins above.
+lcd = LCD.Adafruit_CharLCD(lcd_rs, lcd_en, lcd_d4, lcd_d5, lcd_d6, lcd_d7,
+	                   lcd_columns, lcd_rows, lcd_backlight)
+
+
+
+
+def setup():
+	print "Setting up..."
+	#GPIO.setmode(GPIO.BOARD)
+	GPIO.setmode(GPIO.BCM)
+
+	# para detectar borda de subida e calcular frequencia
+	GPIO.add_event_detect(GPIO_ENTRADA, GPIO.RISING, callback=EventsPerTime, bouncetime=1)
+
+	#GPIO.setup(SENSOR_PRESSAO, GPIO.IN)
+	#GPIO.setup(SENSOR_ROTACAO, GPIO.IN)	
+
+def rpmToHz(rpm):
+	return rpm/60
+
+# necessario conversor ADC
+def getRotation(): #devolver em RPM
+	global RPM
+	#print "Getting rotation"
+	#reading = GPIO.input(SENSOR_ROTACAO)
+	#fazer calculo para transformar em RPM
+	#rpm = (reading*) 
+	#return rpm 
+
+	#reading=[0]
+	#try:
+	#	reading = mcp.read_adc(0)
+	#except:
+	#	print("erro no MCP")
+	#return reading*5 #provisorio
+
+	return RPM
+
+
+
+def getPressure():  #not ready
+	reading=[0]
+	try:
+		reading = mcp.read_adc(1)
+	except:
+		print("erro no MCP")
+	return reading*constant.V_RESOLUTION/constant.VOLTS_PER_MM #3.3/1023 #/constant.VOLTS_PER_MM
+
+def verifyRotation(rotation):
+	lower_lim = constant.ROTATION*(1-constant.ROTATION_TOLERANCE)
+	upper_lim = constant.ROTATION*(1+constant.ROTATION_TOLERANCE)
+	return (rotation >= lower_lim and rotation <= upper_lim)
+
+def verifyPressure(p):
+	global pressure_array
+#	print("TESTE")
+#	print(constant.P_THRESHOLD)
+	while(isSaturated(p) == True):
+		# e necessario obter novos valores de pressao de modo que, quando o filtro seja limpo, um valor abaixo do limiar seja lido, e o programa siga sua execucao normalmente
+		#OBS.: os valores lidos enquanto estiver saturado nao serao armazenados e ao final deste loop, os valores anteriores armazenados serao apagados, pois um novo filtro sera inserido
+		print("FILTRO SATURADO!")
+		printLCD("FILTRO SATURADO!")
+		#GPIO.output(BUZZER, True)
+		#time.sleep(0.2)
+		p = getPressure()
+		pressure_array = np.array([-1]) # resetar array de leituras anteriores
+		printLCD("")	#limpar escrita no LCD
+		print("Pressao = "+str(p)+"mm H20")
+
+		while (GPIO.input(RESET) != True): # se apertarmos o botao
+			t_now = time.time()
+			t_prev = time.time()
+
+			for i in range(6):
+				GPIO.output(BUZZER, True)
+				GPIO.output(LED,True)
+				time.sleep(0.1)
+                                GPIO.output(BUZZER, False)
+                                GPIO.output(LED,False)
+				time.sleep(0.1)
+			while((t_now - t_prev) < 5):
+				GPIO.output(LED, True)
+				time.sleep(0.1)
+				GPIO.output(LED,False)
+				time.sleep(0.1)
+				t_now = time.time()
+
+			t_prev = t_now
+		return False
+
+
+	curr_reading = p
+	last_reading = pressure_array[-1]
+	print("curr = " + str(curr_reading))
+	print("last = " + str(last_reading))
+	return (curr_reading < last_reading*(1-constant.PRESSURE_TOLERANCE))
+	
+def storePressure(p):
+	global pressure_array
+
+	pressure_array = np.append(pressure_array, p)
+
+	if (pressure_array.size > 1000): # manter apenas ultimas 1000 medicoes
+		pressure_array = pressure_array[1:1001]
+	print ("\nPressao armazenada = "+str(p)+" !\n")
+
+def isSaturated(p):
+	print(constant.P_THRESHOLD)
+	return (p >= constant.P_THRESHOLD)
+
+def printLCD(x):
+	lcd.clear()
+	lcd.message(str(x))
+
+if __name__ == "__main__":
+
+	setup()
+
+	try:
+		while(True):
+			r = getRotation()
+			p = getPressure()
+			print("Rotacao = "+str(r)+" RPM"),
+			print("\tPressao = "+str(p)+"mm H20")
+			printLCD("Rotacao\n"+str(r)+" RPM")
+			time.sleep(0.1)
+			#printLCD("  Pressao\n"+str(r)+"")
+
+			if (verifyRotation(r)): # se estiver dentro da faixa desejada
+				# armazenar apos verificar
+				storePressure(p)
+				# armazenar apos verificar
+				storePressure(p)
+
+				while (verifyPressure(p)): #adicionar margem
+			                while (GPIO.input(RESET) != True): # se apertarmos o botao
+        			                t_now = time.time()
+                        			t_prev = time.time()
+
+			                        for i in range(6):
+                        			        GPIO.output(BUZZER, True)
+			                                GPIO.output(LED,True)
+			                                time.sleep(0.1)
+			                                GPIO.output(BUZZER, False)
+			                                GPIO.output(LED,False)
+			                                time.sleep(0.1)
+			                        while((t_now - t_prev) < 5):
+			                                GPIO.output(LED, True)
+			                                time.sleep(0.1)
+			                                GPIO.output(LED,False)
+			                                time.sleep(0.1)
+			                                t_now = time.time()
+
+                        			t_prev = t_now
+
+
+	except KeyboardInterrupt:
+		GPIO.cleanup()
+		lcd.clear()

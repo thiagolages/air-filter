@@ -1,0 +1,10 @@
+Todos os metodos: https://www.dexterindustries.com/howto/run-a-program-on-your-raspberry-pi-at-startup/
+
+Metodo usado: editar /etc/rc.local
+
+1 - Abrir rc.local:
+	sudo nano /etc/rc.local
+2 - Adicionar seguinte linha logo antes de 'exit 0' (nao esquecer do &):
+	sudo python /PATH/PARA/PROGRAMA/A/SER/EXECUTADO.PY &
+3 - Reiniciar o Pi:
+	sudo reboot
